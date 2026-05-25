@@ -1,0 +1,809 @@
+---
+title: "Multispecies or mixed? Compositional controllability as a key to adaptive quota management in multispecies fisheries Code"
+author: "Kohsuke Nakamura"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# --- library ---
+```{r echo=TRUE}
+#解析処理に関するセットアップ、パッケージの読み込みなど
+rm(list = ls(all.names = TRUE))
+
+pacman::p_load(
+  tidyverse,   
+  viridis,     
+  ggcorrplot,  
+  patchwork,    
+  vegan,
+  QRM,
+  zoo)
+
+# --- Settings ---
+
+# 指数表示を避ける
+options(scipen=100000)　
+
+# Set ggplot default theme
+
+theme_set(
+  theme(text = element_text(family= "HiraKakuProN-W3"))
+)
+
+```
+
+
+
+
+# landing of trawl
+```{r}
+# Yearly landing data of trawl
+Trawl_Catch_Y <- readRDS("catch_trawl_yearly.rds")
+
+# To organize the order of species names in case law, levels are assigned.
+Trawl_Catch_Y$Fish_Name_EN <- ordered(Trawl_Catch_Y$Fish_Name_EN,levels = c(
+  "snow_clab", "flathead_flounder", "alaskan_pink_srimp", "others"))
+
+# Plot proportion of landing volume
+p1 <- ggplot(Trawl_Catch_Y) +
+  geom_bar(aes(x = Year,y = Percentage_Catch,fill = Fish_Name_EN), col = "gray30", stat = "identity") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust = 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_text(size = 20,angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20)) +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("snow_clab" = "Snow crab",
+                               "flathead_flounder" = "Flathead flounder",
+                               "alaskan_pink_srimp" = "Alaskan pink shrimp",
+                               "others" = "Other 93 species"),
+                    values = c("snow_clab" = "#ff6666",
+                               "flathead_flounder" = "#ff9999",
+                               "alaskan_pink_srimp" = "#ff99cc",
+                               "others" = "#ffefef")) +
+  guides(fill = FALSE) +
+  labs(x = "Year",y = "Landing volume (%)",fill = " ") 
+
+p1
+  
+# Plot proportion of landing value
+p2 <- ggplot(Trawl_Catch_Y) +
+  geom_bar(aes(x = Year,y = Percentage_Value,fill = Fish_Name_EN),col = "grey30", stat = "identity") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust = 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_text(size = 20,angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20)) +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("snow_clab" = "Snow crab",
+                               "flathead_flounder" = "Flathead flounder",
+                               "alaskan_pink_srimp" = "Alaskan pink shrimp",
+                               "others" = "Other 93 species"),
+                    values = c("snow_clab" = "#ff6666",
+                               "flathead_flounder" = "#ff9999",
+                               "alaskan_pink_srimp" = "#ff99cc",
+                               "others" = "#ffefef")) +
+  guides(fill = FALSE) +
+  labs(x = "Year",y = "Landing value (%)",fill = " ") 
+
+
+p2
+
+
+#  Plot landing volume
+p3 <- ggplot(Trawl_Catch_Y) +
+  geom_bar(aes(x = Year,y = Catch,fill = Fish_Name_EN),col = "grey30", stat = "identity") +
+ # geom_hline(aes(yintercept = 901.4824,linetype = "Average landing volume MT\nAverage landing value million JP",size = 2)) +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust= 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.box= "vertical",
+        legend.position = c(0.8, 0.9), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left") +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,1200,200)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("snow_clab" = "Snow crab",
+                               "flathead_flounder" = "Flathead flounder",
+                               "alaskan_pink_srimp" = "Alaskan pink shrimp",
+                               "others" = "Other 93 species"),
+                    values = c("snow_clab" = "#ff6666",
+                               "flathead_flounder" = "#ff9999",
+                               "alaskan_pink_srimp" = "#ff99cc",
+                               "others" = "#ffefef")) +
+  guides(fill = FALSE, size = FALSE) +
+  labs(x = " ",y = "Landing volume (metric tons)",linetype = " ") 
+  
+p3
+
+
+# Plot landing value
+p4 <- ggplot(Trawl_Catch_Y) +
+  geom_bar(aes(x = Year,y = Value,fill = Fish_Name_EN), col = "grey30", stat = "identity") +
+  theme_bw() +
+  #geom_hline(aes(yintercept = 736.1987,size = 2)) + 
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust= 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.box= "vertical",
+        legend.position = c(0.8, 0.8), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left") +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,1200,200)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("snow_clab" = "Snow crab",
+                               "flathead_flounder" = "Flathead flounder",
+                               "alaskan_pink_srimp" = "Alaskan pink shrimp",
+                               "others" = "Other 93 species"),
+                    values = c("snow_clab" = "#ff6666",
+                               "flathead_flounder" = "#ff9999",
+                               "alaskan_pink_srimp" = "#ff99cc",
+                               "others" = "#ffefef")) +
+  #guides(size = FALSE) +
+  labs(x = " ",y = "Landing value million (JPY)") 
+
+p4
+
+
+# Combine the two figures into one
+landing_volume_trawl <- p3 + p1 + plot_layout(ncol = 1, heights = c(3, 1))
+landing_volume_trawl
+
+landing_value_trawl <- p4 + p2 + plot_layout(ncol = 1, heights = c(3, 1))
+landing_value_trawl
+
+```
+
+
+
+# landing of set-net
+```{r}
+# Yearly landing data of set-net
+setnet_Catch_Y <- readRDS("catch_setnet_yearly.rds")
+
+# To organize the order of species names in case law, levels are assigned.
+setnet_Catch_Y$Fish_Name_EN <- ordered(setnet_Catch_Y$Fish_Name_EN,levels = c(
+  "japanese_spanish_mackerel", "japanese_amberjack", "japanese_jack_mackerel","others"))
+
+# Plot proportion of landing volume
+p5 <- ggplot(setnet_Catch_Y) +
+  geom_bar(aes(x = Year,y = Percentage_Catch,fill = Fish_Name_EN), col = "grey30", stat = "identity") +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25, hjust = 1, vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_text(size = 20,angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20)) +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("japanese_spanish_mackerel" = "Japanese Spanish mackerel",
+                                             "japanese_amberjack" = "Yellowtail",
+                                             "japanese_jack_mackerel" = "Japanese jack mackerel",
+                                             "others" = "Other 74 species"),
+                    values = c( "#0099ff", "#99ccff", "#99ffff", "#dbffff")) +
+   guides(fill = FALSE) +
+  labs(x = "Year",y = "Landing volume (%)",fill = "Species") 
+
+p5
+  
+
+# Plot proportion of landing value
+p6 <- ggplot(setnet_Catch_Y) +
+  geom_bar(aes(x = Year,y = Percentage_Value,fill = Fish_Name_EN), col = "grey30", stat = "identity") +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25, hjust = 1, vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_text(size = 20,angle = 0, hjust = 1),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20)) +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("japanese_spanish_mackerel" = "Japanese Spanish mackerel",
+                                             "japanese_amberjack" = "Yellowtail",
+                                             "japanese_jack_mackerel" = "Japanese jack mackerel",
+                                             "others" = "Other 74 species"),
+                    values = c( "#0099ff", "#99ccff", "#99ffff", "#dbffff")) +
+   guides(fill = FALSE) +
+  labs(x = "Year",y = "Landing value (%)",fill = " ") 
+
+p6
+
+
+# Plot landing volume
+p7 <- ggplot(setnet_Catch_Y) +
+  geom_bar(aes(x = Year,y = Catch,fill = Fish_Name_EN), col = "grey30", stat = "identity") +
+  #geom_hline(aes(yintercept = 184.2796,size = 2)) +
+    theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust= 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.box= "vertical",
+        legend.position = c(0.8, 0.9), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left") +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,300,100)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("japanese_spanish_mackerel" = "Japanese Spanish mackerel",
+                                             "japanese_amberjack" = "Yellowtail",
+                                             "japanese_jack_mackerel" = "Japanese jack mackerel",
+                                             "others" = "Other 74 species"),
+                    values = c( "#0099ff", "#99ccff", "#99ffff", "#dbffff")) +
+  guides(size = FALSE, fill = FALSE) +
+  labs(x = " ",y = "Landing volume (metiric tons)") 
+  
+p7
+
+
+# Plot landing value
+p8 <- ggplot(setnet_Catch_Y) +
+  geom_bar(aes(x = Year,y = Value,fill = Fish_Name_EN), col = "grey30", stat = "identity") +
+ # geom_hline(aes(yintercept = 125.6745,linetype = "Average landing volume MT\nAverage landing value million JP",size = 2)) + 
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 25),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 25,hjust= 1,vjust = 1),
+        axis.title.y= element_text(size = 25,angle = 90,vjust = 0.8),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.box= "vertical",
+        legend.position = c(0.8, 0.7), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left") +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(breaks = seq(0,500,100)) +
+  scale_fill_manual(name = "Species",
+                    labels = c("japanese_spanish_mackerel" = "Japanese Spanish mackerel",
+                                             "japanese_amberjack" = "Yellowtail",
+                                             "japanese_jack_mackerel" = "Japanese jack mackerel",
+                                             "others" = "Other 74 species"),
+                    values = c( "#0099ff", "#99ccff", "#99ffff", "#dbffff")) +
+  guides(fill = guide_legend(override.aes = list(size = 5)),
+         size = FALSE) +
+  
+  labs(x = " ",y = "Landing value million (JPY)") 
+
+p8
+
+
+# Combine the two figures into one
+landing_volume_setnet <- p7 + p5 + plot_layout(ncol = 1, heights = c(3, 1))
+landing_volume_setnet
+
+landing_value_setnet <- p8 + p6 + plot_layout(ncol = 1, heights = c(3, 1))
+landing_value_setnet
+
+```
+
+
+
+
+
+```{r}
+# Since we cannot provide the raw data, we will show the code to process the raw data into simpson_catch.rds.
+#Simpson <- dat_kaga  %>% 
+#    group_by(Year, Fishery_Type_EN, Fish_Name_EN) %>% 
+#    summarise(Catch = (sum(Catch_kg)/1000),
+#              Value = (sum(Value_JPY))) %>%
+#    mutate(Percentage_Catch = (Catch/sum(Catch)),
+#           Percentage_Value = (Value/sum(Value))) %>%
+#    mutate(Simpson_Catch = Percentage_Catch^2,
+#           Simpson_Value = Percentage_Value^2) %>%
+#    group_by(Year, Fishery_Type_EN) %>% 
+#    summarise(Simpson_Catch_Total = 1/sum(Simpson_Catch),
+#              Simpson_Value_Total = 1/sum(Simpson_Value),
+#              Catch = sum(Catch),
+#              Value = sum(Value)) %>% 
+#    mutate(Percentage_Catch = (Catch/sum(Catch))*100,
+#           Percentage_Value = (Value/sum(Value))*100) 
+
+#saveRDS(Simpson, file = "simpson_catch.rds")
+
+
+# Simpson index data of landing volume in trawl and set-net
+Simpspn_Catch <- readRDS("simpson_catch.rds")
+
+# Plot simpson of landing volume
+diversity_c <- ggplot(Simpspn_Catch %>% dplyr::filter(frag == "Simpson_Catch_Total")) + #theme_economist() +
+  geom_point(aes(x = Year, y = Simpson, col = Fishery_Type_EN), size = 3) +
+  geom_line( aes(x = Year, y = Simpson, col = Fishery_Type_EN)) +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 35),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 35, hjust = 1),
+        axis.title.y= element_text(size = 35,angle = 90),
+        axis.text.x = element_text(size = 30, hjust = 1),
+        axis.text.y = element_text(size = 30),
+        legend.text = element_text(size = 30,angle = 0,vjust = 0.5),
+        legend.title = element_text(size = 30), 
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        legend.box= "horizontal",
+        legend.position = c(0.8, 0.8), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left",
+        strip.text = element_text(size = 20))  +
+  scale_x_continuous(breaks = seq(1995,2020,5)) +
+  scale_y_continuous(limits = c(0,14),breaks = seq(0,12,4)) +
+  scale_color_hue(name = "Fishery type", labels = c("bottom_trawl_net" = "bottom trawl fisheires",
+                                                    "set_net" = "set net fisheries")) +
+  labs(x = "Year",y = "Speceis diversity of landing volume (λ)")
+
+diversity_c
+
+```
+
+
+
+
+# monthly similarity
+## trawl
+```{r}
+library("abdiv")
+
+# Function to calculate similarity
+horn_morisita <- function (x, y) 
+{
+    Nx <- sum(x)
+    Ny <- sum(y)
+    lambda_x <- sum(x^2)/(Nx^2)
+    lambda_y <- sum(y^2)/(Ny^2)
+    2 * sum(x * y)/((lambda_x + lambda_y) * Nx * Ny)
+}
+
+
+# Monthly landing data for bottom trawl fisheries. Data for July and August is omitted due to closure.
+Catch_Rate_trawl <- readRDS("catch_trawl_monthly.rds")
+
+# Month and year list for loop
+Month_list_trawl <- c(1,2,3,4,5,6,9,10,11,12)
+Year_list_trawl <- c(1995:2018)
+
+# A data frame for storing the results of a loop
+results_output_catch_trawl <- data.frame(c(NA), c(NA), c(NA))
+names(results_output_catch_trawl) <- c("similarity_catch", "Year", "Month")
+
+# calculate similarity
+for (i in 1:length(Month_list_trawl)) {
+  
+  # Convert monthly data to a wide format
+  
+Catch_Rate_trawl_roop <- Catch_Rate_trawl %>% 
+  dplyr::filter(Month == Month_list_trawl[i]) %>% 
+  select(Year, Fish_Name_EN, Percentage_Catch) %>% 
+  pivot_wider(id_cols = Fish_Name_EN, names_from = Year, 
+              values_from = Percentage_Catch, values_fill = 0) %>% 
+  select(-Fish_Name_EN)
+
+# Data frame to store the results of the second loop
+results_output_catch_trawl_2 <- data.frame(c(NA), c(NA))
+
+for (j in 1:length(Year_list_trawl)) {
+  
+  # The similarity in the proportion of landing volume for adjacent years is calculated on a month-by-month basis
+  
+  x = Catch_Rate_trawl_roop[,j]
+  y = Catch_Rate_trawl_roop[,j + 1]
+  similarity <- horn_morisita(x, y)
+  
+ results_output_catch_trawl_2[j,1] <- similarity
+ results_output_catch_trawl_2[j,2] <- Year_list_trawl[j] + 1
+ 
+ names(results_output_catch_trawl_2) <- c("similarity_catch", "Year")
+
+}
+
+results_output_catch_trawl_2 <- mutate(results_output_catch_trawl_2, 
+                         Month = Month_list_trawl[i])
+
+results_output_catch_trawl <- rbind(results_output_catch_trawl, results_output_catch_trawl_2)
+
+}
+
+
+
+results_output_catch_trawl <- results_output_catch_trawl[-1,]
+
+# Calculate average and standard diviation of similarity
+results_output_catch_trawl_ave <- results_output_catch_trawl %>% 
+  group_by(Month) %>% 
+  summarise(similarity_catch_ave = mean(similarity_catch),
+            similarity_catch_sd = sd(similarity_catch))
+
+```
+
+
+
+## set-net
+```{r}
+library("abdiv")
+
+# Function to calculate similarity
+horn_morisita <- function (x, y) 
+{
+    Nx <- sum(x)
+    Ny <- sum(y)
+    lambda_x <- sum(x^2)/(Nx^2)
+    lambda_y <- sum(y^2)/(Ny^2)
+    2 * sum(x * y)/((lambda_x + lambda_y) * Nx * Ny)
+}
+
+
+# Monthly landing data for bottom trawl fisheries. Data for January, February, March and December are omitted due to closure.
+Catch_Rate_setnet <- Catch_Rate_setnet <- readRDS("catch_setnet_monthly.rds")
+  
+# The November data does not have a consistent year count, so it will be calculated separately
+# Month and year list for loop
+Month_list_setnet <- c(4:11)
+Year_list_setnet <- c(1995:2018)
+
+# A data frame for storing the results of a loop
+results_output_catch_setnet <- data.frame(c(NA), c(NA), c(NA))
+names(results_output_catch_setnet) <- c("similarity_catch", "Year", "Month")
+
+# calculate similarity
+for (i in 1:7) { # Since November will be calculated separately, we will calculate from April to October here.
+  
+Catch_Rate_setnet_roop_Catch <- Catch_Rate_setnet %>% 
+  dplyr::filter(Month == Month_list_setnet[i]) %>% 
+  select(Year, Fish_Name_EN, Percentage_Catch) %>% 
+  pivot_wider(id_cols = Fish_Name_EN, names_from = Year, 
+              values_from = Percentage_Catch, values_fill = 0) %>% 
+  select(-Fish_Name_EN)
+
+
+# Data frame to store the results of the second loop
+results_output_catch_setnet_2 <- data.frame(c(NA), c(NA))
+
+
+for (j in 1:length(Year_list_setnet)) {
+  
+   # Convert monthly data to a wide format
+  
+  x = Catch_Rate_setnet_roop_Catch[,j]
+  y = Catch_Rate_setnet_roop_Catch[,j + 1]
+  similarity <- horn_morisita(x, y)
+  names(results_output_catch_setnet_2) <- c("similarity_catch", "Year")
+  
+ results_output_catch_setnet_2[j,1] <- similarity
+ results_output_catch_setnet_2[j,2] <- Year_list_setnet[j] + 1
+
+}
+
+results_output_catch_setnet_2 <- mutate(results_output_catch_setnet_2, 
+                         Month = Month_list_setnet[i])
+
+results_output_catch_setnet <- rbind(results_output_catch_setnet, results_output_catch_setnet_2)
+
+}
+
+# -----------The calculation for November is done here
+Catch_Rate_setnet_roop_Catch <- Catch_Rate_setnet %>% 
+  dplyr::filter(Month == 11) %>% 
+  select(Year, Fish_Name_EN, Percentage_Catch) %>% 
+  pivot_wider(id_cols = Fish_Name_EN, names_from = Year, 
+              values_from = Percentage_Catch, values_fill = 0) %>% 
+  select(-Fish_Name_EN)
+
+results_output_catch_setnet_2 <- data.frame(c(NA), c(NA))
+
+ for (j in 1:20) { # Since the years 1995-1997 and 2017 are not available, the values must be specified directly.
+   
+  
+  x = Catch_Rate_setnet_roop_Catch[,j]
+  y = Catch_Rate_setnet_roop_Catch[,j + 1]
+  similarity <- horn_morisita(x, y)
+  names(results_output_catch_setnet_2) <- c("similarity_catch", "Year")
+  
+ results_output_catch_setnet_2[j,1] <- similarity
+ results_output_catch_setnet_2[j,2] <- Year_list_setnet[j] + 4
+
+}
+
+results_output_catch_setnet_2 <- mutate(results_output_catch_setnet_2, Month = 11)
+
+results_output_catch_setnet <- rbind(results_output_catch_setnet, results_output_catch_setnet_2)
+
+#-------------That concludes the calculations for November
+
+results_output_catch_setnet <- results_output_catch_setnet[-1,]
+
+results_output_catch_setnet_ave <- results_output_catch_setnet %>% 
+  group_by(Month) %>% 
+  summarise(similarity_catch_ave = mean(similarity_catch),
+            similarity_catch_sd = sd(similarity_catch))
+
+
+```
+
+
+
+## plot of similarity
+```{r}
+# Combining data from trawl and set-net
+trawl_simi <- results_output_catch_trawl %>% 
+  mutate(fishery = "trawl")
+
+setnet_simi <- results_output_catch_setnet %>% 
+  mutate(fishery = "setnet")
+
+simi_trawl_setnet <- rbind(trawl_simi, setnet_simi)
+
+
+# Average and standard deviation of simirality
+simi_trawl_setnet_ave <- simi_trawl_setnet %>% 
+  group_by(fishery, Month) %>% 
+  summarise(Ave_similarity = mean(similarity_catch),
+         SD_similarity = sd(similarity_catch)) %>% 
+  mutate(CV_similarity = SD_similarity/Ave_similarity)
+
+
+# Plot of similarity
+similarity_catch_value_g <- ggplot(simi_trawl_setnet_ave) +
+  geom_point(aes(x = Month, y = Ave_similarity, col = fishery),
+             size = 5, position = position_dodge(0.5), alpha = 0.5) +
+  geom_errorbar(aes(x = Month, y = Ave_similarity, ymin = Ave_similarity - SD_similarity, ymax = Ave_similarity + SD_similarity, col = fishery, group = fishery),
+                width = 0.5, position = position_dodge(0.5), size = 2, alpha = 0.5) +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuProN-W3", size = 35),
+        panel.background=element_rect(fill="white"),
+        axis.title.x= element_text(size = 35, hjust = 1),
+        axis.title.y= element_text(size = 35,angle = 90),
+        axis.text.x = element_text(size = 30, angle = 0),
+        axis.text.y = element_text(size = 30),
+        legend.text = element_text(size = 30,angle = 0,vjust = 0.5),
+        legend.title = element_text(size = 30), 
+        legend.box= "horizontal",
+        legend.position = c(0.2, 0.1), 
+        #legend.justification = c("left", "top"),
+        legend.direction = "vertical",
+        legend.box.just = "left",
+        strip.text = element_text(size = 20))  +
+  #facet_wrap(~frag, labeller = labeller(frag = landing_labs2_jp), nrow = 2) +
+  scale_x_continuous(breaks = seq(1, 12, 1)) +
+  scale_y_continuous(breaks = seq(0, 1.0, 0.2), limits = c(0, 1.05)) +
+  scale_color_hue(name = "Fishery type", labels = c("trawl" = "bottom trawl fisheries",
+                                                    "setnet" = "set net fisheries")) +
+ # labs(x = "Month",y = "Similarity (Cλ)")
+  labs(x = "Month",y = "Similarity of landing volume (C)")
+
+similarity_catch_value_g
+
+```
+
+
+
+# Bayesian Beta Regression Analysis of Gear Differences in Species Composition Stability
+## Making a dataframe
+```{r}
+# Define the months to be tested and pick out the months that overlap between bottom trawl and set-net
+target_months <- c(4, 5, 6, 9, 10, 11)
+
+# Filter by target month
+trawl_filtered <- trawl_simi %>% dplyr::filter(Month %in% target_months)
+setnet_filtered <- setnet_simi %>% dplyr::filter(Month %in% target_months)
+
+# Internal join by year and month (only corresponding data).
+merged <- inner_join(trawl_filtered, setnet_filtered, by = c("Year", "Month"),
+                     suffix = c("_trawl", "_setnet"))
+
+```
+
+
+
+## Conducting the examination
+```{r}
+library(brms)
+
+df <- merged |>
+  select(Year, Month, similarity_catch_trawl, similarity_catch_setnet) |>
+  pivot_longer(cols = c(similarity_catch_trawl, similarity_catch_setnet),
+               names_to = "Method", values_to = "Similarity") |>
+  mutate(Method = recode(Method,
+                         similarity_catch_trawl = "Trawl",
+                         similarity_catch_setnet = "Setnet"))
+
+# Ensure Method and Month are factors with desired reference levels
+df$Method <- factor(df$Method, levels = c("Setnet","Trawl"))  # baseline = Setnet
+df$Month  <- factor(df$Month)  # baseline will be the first level (e.g., "4" for April)
+
+# Fit Bayesian beta regression with logit link
+fit <- brm(
+  formula = Similarity ~ Method * Month + (1 | Year), 
+  family  = Beta(link = "logit"), 
+  data    = df,
+  chains  = 4, cores = 4, iter = 4000, warmup = 1000,
+  seed    = 123
+)
+
+summary(fit)  # show fixed effects estimates and random effect variance
+
+# Posterior estimates for monthly differences (Trawl - Setnet)
+# MethodTrawl:MonthX terms represent the additional effect of Trawl in month X.
+library(emmeans)
+emm <- emmeans(fit, ~ Method | Month, re_formula = NA)        # marginal means by Method*Month
+diffs <- contrast(emm, method = "trt.vs.ctrl", ref = "Setnet") # Trawl minus Setnet for each month
+summary(diffs, level = 0.95, type = "response")  # get differences on original scale with 95% CI
+
+```
+
+
+
+# Table
+```{r}
+library(emmeans)　　# https://sugiura-ken.org/wiki/wiki.cgi/exp?page=emmeans
+library(dplyr)
+library(gt)
+
+# Compute marginal means for each Method within each Month on the response scale
+emm <- emmeans(fit, ~ Method | Month, type = "response", re_formula = NA)
+
+# Compute contrasts: Trawl - Setnet for each Month (with Bayesian 95% credible intervals)
+monthly_diff <- pairs(emm, by = "Month", infer = TRUE)  # infer=TRUE to get HPD interval
+diff_summary <- as.data.frame(monthly_diff)
+
+# View the summary (contains Month, contrast, estimate, lower.HPD, upper.HPD)
+print(diff_summary)
+
+# Calculate P(Trawl > Setnet) for each month using posterior predictions
+# Prepare new data for each Method and Month (use re_formula=NA to ignore random effects like Year)
+months <- levels(df$Month)  # assume Month is a factor; if not, use unique(df$Month)
+# If Month is not a factor, you might want to ensure it's treated consistently:
+# months <- sort(unique(df$Month))
+
+# Use an example Year (if Year is a factor or numeric in the model) for prediction.
+# If Year is included as a random effect, re_formula=NA will ignore it, so any valid value works.
+example_year <- df$Year[1]  # take first year from data as an example
+newdata_set <- data.frame(Method = factor("Setnet", levels=levels(df$Method)),
+                          Month  = factor(months, levels=levels(df$Month)),
+                          Year   = example_year)
+newdata_trawl <- data.frame(Method = factor("Trawl", levels=levels(df$Method)),
+                            Month  = factor(months, levels=levels(df$Month)),
+                            Year   = example_year)
+
+# Draw posterior samples of the expected value of Similarity for each scenario
+post_set   <- posterior_epred(fit, newdata = newdata_set, re_formula = NA)
+post_trawl <- posterior_epred(fit, newdata = newdata_trawl, re_formula = NA)
+
+# Each of post_set and post_trawl is a matrix: [n_draws x n_months].
+# Compute difference draws for each month:
+diff_draws <- post_trawl - post_set  # matrix of posterior draws of (Trawl - Setnet) for each month
+
+# Summarize the differences: mean, 95% CI, and probability > 0
+diff_mean   <- colMeans(diff_draws)
+diff_lower  <- apply(diff_draws, 2, quantile, probs = 0.025)  # 2.5th percentile
+diff_upper  <- apply(diff_draws, 2, quantile, probs = 0.975)  # 97.5th percentile
+diff_prob   <- colMeans(diff_draws > 0)  # proportion of draws where difference > 0
+
+# Compile results into a data frame
+results_df <- data.frame(
+  Month          = months,
+  Mean_Diff      = diff_mean,
+  CI_lower       = diff_lower,
+  CI_upper       = diff_upper,
+  P_Trawl_gt_Set = diff_prob
+)
+
+
+
+table1 <- results_df |>
+  mutate(
+    Mean_Diff      = round(Mean_Diff, 3),
+    CI_lower       = round(CI_lower, 3),
+    CI_upper       = round(CI_upper, 3),
+    `95% CI`       = paste0(CI_lower, " to ", CI_upper),
+    P_Trawl_gt_Set = round(P_Trawl_gt_Set, 4)
+  ) |>
+  select(Month, Mean_Diff, `95% CI`, P_Trawl_gt_Set) %>%
+  gt() |>
+  
+  # Column label settings
+  cols_label(
+    Month          = "Month",
+    Mean_Diff      = "Mean difference",
+    `95% CI`       = "95% CI",
+    P_Trawl_gt_Set = "P(Trawl > Setnet)"
+  ) |>
+  
+  # Overall styling of the table
+  tab_options(
+    #table.border.top.color = wa_colors$border,
+    table.border.top.width = px(2),
+    #table.border.bottom.color = wa_colors$border,
+    table.border.bottom.width = px(2),
+    #column_labels.border.bottom.color = wa_colors$header_bg,
+    column_labels.border.bottom.width = px(2),
+    #column_labels.border.top.color = wa_colors$header_bg,
+    data_row.padding = px(8),
+    table.font.size = px(12),
+    heading.padding = px(10)#,
+    #row.striping.background_color = wa_colors$stripe_bg
+  ) 
+
+table1
+
+```
+
+
+
+# Plot
+```{r}
+library(tidyr)
+library(ggplot2)
+
+
+# Data preparation
+colnames(diff_draws) <- months
+diff_long <- as.data.frame(diff_draws) |>
+  pivot_longer(cols = everything(), names_to = "Month", values_to = "Difference")
+diff_long$Month <- factor(diff_long$Month, levels = months)
+
+# Plot
+p9 <- ggplot(diff_long, aes(x = Difference, fill = Month, color = Month)) +
+  geom_density(alpha = 0.4, size = 0.8) +
+  geom_vline(xintercept = 0, 
+             linetype = "dashed", 
+             color = "black",  
+             alpha = 0.7,
+             size = 0.5) +
+  facet_wrap(~ Month, ncol = 4, scales = "free_y") +
+  #scale_fill_manual(values = wa_colors_12) +
+  #scale_color_manual(values = wa_colors_12) +
+  labs(
+    x = "Difference (Trawl - Setnet)", 
+    y = "Posterior density"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  scale_y_continuous(breaks = seq(0, 12, 4), limits = c(0, 12))
+
+p9
+
+```
+
+
+
+
+
