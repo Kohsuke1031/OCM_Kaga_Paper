@@ -1,0 +1,160 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-07-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Library読み込む
+```{r echo=TRUE}
+#解析処理に関するセットアップ、パッケージの読み込みなど
+rm(list = ls(all.names = TRUE))
+
+library(tidyverse)
+library(ggsci)
+#library(gdata)
+library(DT)
+
+```
+
+
+# 元データ読み込み
+## 石川県全域
+```{r eval=FALSE, include=FALSE}
+#list.file関数とread_csv関数を用いて一括で読み込む
+df_paths = list.files(path = "/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Original/石川県庁/raw_data/Ishikawa_Original_Data",full.names = T)
+
+read_files <- function(x){
+  df <- read.csv(x,
+                 header = T,
+                 fileEncoding = "CP932")
+  return(df)
+}
+
+Ishikawa_All <- as.data.frame(NULL)
+
+for (i in 1:length(df_paths)) {
+  df <- read_files(df_paths[i])
+  Ishikawa_All <- rbind(Ishikawa_All,df)
+}
+
+df <- as.data.frame(NULL)
+
+# これがcleaned dataに該当する
+#saveRDS(Ishikawa_All, file = "/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Original/石川県庁/cleaned_data/Ishikawa_Data_1995_2020.rds")
+
+```
+
+
+# データ数確認
+```{r eval=FALSE, include=FALSE}
+trawl <- Ishikawa_All %>% 
+  dplyr::filter(漁業種類 == "底曳網") %>% 
+  dplyr::filter(水揚港 == "加賀支所")
+
+setnet <- Ishikawa_All %>% 
+  dplyr::filter(漁業種類 == "定置網") %>% 
+  dplyr::filter(水揚港 == "加賀支所")
+
+
+
+
+```
+
+
+
+
+## 魚種名統一
+```{r,eval=FALSE }
+#種名の統一
+Fish_Name <- read_csv("/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Edit_Data/Kaga_All_Fish.csv")　
+
+# Ishikawa_Allと結合
+Ishikawa_All <- left_join(Ishikawa_All,Fish_Name,by = c("銘柄名" = "Fish_Name_JP_in_Data"))
+
+```
+
+
+## 市場統一
+```{r,eval=FALSE }
+# 市場名の統一
+Market <- read_csv("/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Edit_Data/Kaga_Market.csv")　
+
+# Ishikawa_Allと結合
+Ishikawa_All <- left_join(Ishikawa_All,Market,by = c("水揚港" = "Market"))
+
+```
+
+
+## 漁業名変換
+```{r,eval=FALSE }
+#漁業名の統一
+Fishery <- read_csv("/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Edit_Data/Kaga_All_Fishery.csv")　
+
+# Ishikawa_Allと結合
+Ishikawa_All <- left_join(Ishikawa_All,Fishery,by = c("漁業種類" = "Fishery_Type"))
+
+```
+
+
+
+## データクリーニング
+```{r,eval = FALSE}
+#水揚げ日のデータ型をDateに変える、その後lubridate関数でYearとMonthに分けた
+Ishikawa_All$"水揚げ年月日" <- as.Date(Ishikawa_All$"水揚げ年月日")
+
+Ishikawa_All = Ishikawa_All %>%
+  mutate(Month = lubridate::month(水揚げ年月日),Year=lubridate::year(水揚げ年月日))
+
+# 列の削除、見やすくするため
+Ishikawa_All <- Ishikawa_All[-c(2,3,4,5,6)]
+
+#列の並び替え、見やすくするため
+Ishikawa_All <- Ishikawa_All[c(1,11,10,8,9,2,5,6,7,3,4)]
+
+names(Ishikawa_All) <- c("Date","Year","Month","Market_EN","Fishery_Type_EN","Fish_Name_in_Data","Fish_Name_JP",
+                         "Scientific_Name","Fish_Name_EN","Catch_kg","Value_JPY")
+
+
+#CatchとValueの０以下を削除
+Ishikawa_All <- Ishikawa_All %>% 
+  filter(!Catch_kg <= 0) %>% 
+  filter(!Value_JPY <= 0)
+
+```
+
+
+
+## 消費者物価指数の導入
+```{r,eval = FALSE}
+CPI <- read_csv("/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Edit_Data/CPI_Fresh_Seafood_2020.csv")
+
+Ishikawa_All <- left_join(Ishikawa_All,CPI,by = "Year")
+
+Ishikawa_All <- Ishikawa_All %>% 
+  mutate(Real_Value_JPY = Value_JPY * CPI_Factor)
+
+Ishikawa_All <- Ishikawa_All[-c(11,12)]
+
+
+#saveRDS(Ishikawa_All,file = "/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Analysis_Data/Ishikawa_Data_8Jul24.rds")
+
+```
+
+
+
+
+# データ読み込み
+```{r, eval = FALSE}
+Ishikawa_All <- readRDS("/Users/nakamurakousuke/Library/CloudStorage/GoogleDrive-kohsuke.nakamura@fisheries.agr.iwate-u.ac.jp/Shared drives/gakulab_data/Project/Kaga_paper/Analysis_Data/Ishikawa_Data_8Jul24.rds")
+
+```
+
+
+
+
+
